@@ -2,6 +2,7 @@
 import scrapy
 
 
+
 class DiscoverySpider(scrapy.Spider):
     name = 'discovery'
     allowed_domains = ['www.xinpianchang.com']
@@ -16,9 +17,17 @@ class DiscoverySpider(scrapy.Spider):
             post_title=one_post.xpath('./div/a/p/text()').extract_first()
             #获取视频的进入地址的网页url
             post_vedio_url=vedio_url%post_id
-            print(post_vedio_url,'这是视频的进入链接')
-
+            request=scrapy.Request(post_vedio_url,callback=self.parse_detail)
+            request.meta['title']=post_title
+            yield request
         #获取下一页的url
         next_page_url=response.xpath('//a[@title="下一页"]/@href').extract_first()
         if next_page_url:
-            yield scrapy.Request(next_page_url,callback=self.parse)
+            yield response.follow(next_page_url,callback=self.parse)
+
+    def parse_detail(self,response):
+        from xpc.xpc.items import PostItem
+        postitem=PostItem()
+        postitem['big_img']=response.xpath('//img[@class="vjs-poster"]/@src').extract_first()
+        postitem['title']=response.meta['title']
+        yield postitem
