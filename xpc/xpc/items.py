@@ -10,6 +10,8 @@ from scrapy import Field
 
 #视频信息的item
 class PostItem(scrapy.Item):
+    #表名
+    table_name='posts'
     # define the fields for your item here like:
     # name = scrapy.Field()
     #这个是视频的id
@@ -37,6 +39,7 @@ class PostItem(scrapy.Item):
 
 #这个是评论的item
 class CommentItem(scrapy.Item):
+    table_name='comments'
     #评论的id
     commentid = Field()
     #回复的文章的id
@@ -49,3 +52,25 @@ class CommentItem(scrapy.Item):
     content = Field()
     #点赞数
     like_counts = Field()
+
+#作者的详细信息类
+class ComposerItem(scrapy.Item):
+    table_name='composers'
+    #作者的id
+    cid=Field()
+    #作者详情页的banner图
+    banner=Field()
+    #作者的头像
+    avatar=Field()
+    #是否是认证的
+    verified=Field()
+    #作者的名字
+    name=Field()
+    #作者的介绍
+    intro=Field()
+    #作者的人气
+    like_counts=Field()
+    #作者的粉丝数
+    fans_counts=Field()
+    #作者的关注数
+    follow_counts=Field()

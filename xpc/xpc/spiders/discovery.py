@@ -3,7 +3,8 @@ import json
 
 import scrapy
 
-from xpc.items import PostItem, CommentItem
+from xpc import num_to_int
+from xpc.items import PostItem, CommentItem, ComposerItem
 
 comment_api='https://www.xinpianchang.com/article/filmplay/ts-getCommentApi?pagesize=6&page=%s&id=%s'
 
@@ -47,7 +48,8 @@ class DiscoverySpider(scrapy.Spider):
         postitem['preview']=response.xpath('//div[@class="filmplay"]//img/@src').extract_first()
         #视频的地址
         video_url=response.xpath('//a[@id="player"]/@href').get()
-        video_url=video_url[2:]
+        if video_url:
+            video_url=video_url[2:]
         postitem['video']=video_url
         #这个是视频的格式
         video_format=str(video_url).split('.')[-1]
@@ -60,14 +62,21 @@ class DiscoverySpider(scrapy.Spider):
         postitem['created_at']=created_at
         #这个是视频的播放次数
         play_counts=response.xpath('//i[contains(@class,"play-counts")]/text()').get()
-        postitem['play_counts']=play_counts
+        postitem['play_counts']=num_to_int(play_counts)
         #视频的喜爱次数
         like_counts=response.xpath('//span[contains(@class,"like-counts")]/text()').get()
-        postitem['like_counts']=like_counts
+        postitem['like_counts']=num_to_int(like_counts)
         #视频的描述
         description=response.xpath('//p[contains(@class,"desc")]/text()').get()
         postitem['description']=description
         yield postitem
+        #把去往作者详情的链接提取出来,然后yield到相应的方法上面去
+        composers=response.xpath('//a[@class="head-wrap"]')
+        for one in composers:
+            composer_url=one.xpath('./@href').get()
+            crequest=scrapy.Request('http://www.xinpianchang.com'+composer_url,callback=self.parse_composer)
+            crequest.meta['composer_id']=one.xpath('./@data-userid').get()
+            yield crequest
 
         #把这篇文章的评论解析出来,跳转到评论方法上
         request=scrapy.Request(comment_api%(1,postitem['pid']),callback=self.parse_comment)
@@ -84,7 +93,6 @@ class DiscoverySpider(scrapy.Spider):
         page=response.meta['page']
         data=json.loads(json_data)
         total_page=data['data']['total_page']
-        print('*-*_'*50)
         data_list=data['data']['list']
         #遍历接口数据,然后填充到item
         for one_data in data_list:
@@ -95,7 +103,7 @@ class DiscoverySpider(scrapy.Spider):
             item['cid']=one_data['userInfo']['userid']
             item['created_at']=one_data['addtime']
             item['content']=one_data['content']
-            item['like_counts']=one_data['count_approve']
+            item['like_counts']=num_to_int(one_data['count_approve'])
             #提交item
             yield item
         #执行循环遍历接口,得到数据
@@ -105,5 +113,26 @@ class DiscoverySpider(scrapy.Spider):
             request = scrapy.Request(comment_api % (page, pid), callback=self.parse_comment)
             request.meta['page'] = page
             request.meta['pid'] = pid
+            yield request
 
+    #解析评论中作者的详细信息的方法
+    def parse_composer(self,response):
+        ci=ComposerItem()
+        ci['cid']=response.meta['composer_id']
+        banner_url=response.xpath('//div[@class="banner-wrap"]/@style').get()
+        banner_url=str(banner_url).split('(')[1][:-1]
+        ci['banner']=banner_url
+        ci['avatar']=response.xpath('//span[@class="avator-wrap-s"]/img/@src').get()
+        verified=response.xpath('//span[@class="avator-wrap-s"]//span[contains(@class,"author-v")]/@class')
+        if verified:
+            ci['verified']=True
+        else:
+            ci['verified']=False
+        ci['name']=response.xpath('//p[contains(@class,"creator-name")]/text()').get()
+        ci['intro']=response.xpath('//p[contains(@class,"creator-desc")]/text()').get()
+        ci['like_counts']=num_to_int(response.xpath('//span[contains(@class,"like-counts")]/text()').get())
+        ci['fans_counts']=num_to_int(response.xpath('//span[contains(@class,"fans-counts")]/text()').get())
+        follow_counts=response.xpath('//span[@class="follow-wrap"]/span[contains(@class,"fw_600")]/text()').get()
+        ci['follow_counts']=num_to_int(follow_counts)
+        yield ci
 
